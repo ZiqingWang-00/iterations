@@ -1,0 +1,193 @@
+---
+title: "iterations"
+author: "Ziqing Wang"
+date: "2022-11-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggplot2)
+```
+
+## Lists
+Create a list:
+```{r}
+vec_numeric = 5:8
+vec_logical = c(T, F, T, T)
+l = list(
+  vec_numeric = 5:8,
+  mat = matrix(1:8, 2, 4),
+  vec_logical = c(T, F, T, T),
+  summary = summary(rnorm(1000))
+)
+l
+```
+Accessing items from a list:
+```{r}
+l$vec_numeric
+
+l[[3]]
+
+l[["mat"]]
+```
+
+## Loops!
+```{r}
+list_norm = list(
+  a = rnorm(20, 5, 4),
+  b = rnorm(20, -12, 3),
+  c = rnorm(20, 17, 0.4),
+  d = rnorm(20, 100, 1)
+)
+```
+
+Here's my function:
+```{r}
+mean_and_sd = function(x) {
+  
+  if (!is.numeric(x)) {
+    stop("Argument x should be numeric")
+  } else if (length(x) == 1) {
+    stop("Cannot be computed for length 1 vectors")
+  }
+  
+  mean_x = mean(x)
+  sd_x = sd(x)
+
+  tibble(
+    mean = mean_x, 
+    sd = sd_x
+  )
+}
+
+```
+
+This is tedious:
+```{r}
+mean_and_sd(list_norm[[1]])
+mean_and_sd(list_norm[[2]])
+mean_and_sd(list_norm[[3]])
+mean_and_sd(list_norm[[4]])
+
+```
+
+Let's a `for` loop instead:
+```{r}
+output = vector("list", length = 4)
+for (i in 1:4){
+  output[[i]] = mean_and_sd(list_norm[[i]])
+}
+output
+```
+
+## map
+```{r}
+map(list_norm, mean_and_sd)
+```
+
+What about other functions?
+```{r}
+map(list_norm, summary)
+```
+
+map variants:
+```{r}
+map_dbl(list_norm, median)
+```
+
+```{r}
+map_df(list_norm, mean_and_sd)
+```
+
+## list columns ...
+
+```{r}
+listcol_df = 
+  tibble(
+    name = c("a", "b", "c", "d"),
+    norm = list_norm
+  )
+```
+
+```{r}
+listcol_df[["norm"]]
+```
+
+```{r}
+map(listcol_df[["norm"]], mean_and_sd)
+```
+
+Can we add list columns, and then what
+
+```{r}
+listcol_df %>%
+  mutate(
+    m_sd = map(norm, mean_and_sd)
+  ) %>%
+  select(-norm)
+```
+
+## What about something more realistic?
+
+```{r}
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728", "USC00519397", "USS0023B17S"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2017-01-01",
+    date_max = "2017-12-31") %>%
+  mutate(
+    name = recode(
+      id, 
+      USW00094728 = "CentralPark_NY", 
+      USC00519397 = "Waikiki_HA",
+      USS0023B17S = "Waterhole_WA"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+
+weather_df
+```
+
+```{r}
+weather_nest_df = weather_df %>%
+  nest(data = date:tmin)
+weather_nest_df
+```
+
+Is a list column!
+```{r}
+weather_nest_df[["data"]]
+```
+
+
+```{r}
+weather_nest_df[["data"]][[1]]
+
+lm(tmax ~ tmin, data = weather_nest_df[["data"]][[1]])
+```
+
+Write a short global function:
+
+```{r}
+weather_lm = function(df){
+  lm(tmax ~ tmin, data = df)
+}
+```
+
+```{r}
+weather_lm(weather_nest_df[["data"]][[1]])
+```
+
+```{r}
+map(weather_nest_df[["data"]], weather_lm)
+```
+
+unnesting
+```{r}
+weather_nest_df %>%
+  unnest(data)
+```
+
